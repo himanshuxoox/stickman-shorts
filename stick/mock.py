@@ -1,0 +1,27 @@
+"""Canned script for offline tests (python -m stick.batch --mock)."""
+MOCK_SCRIPT = {
+    "title": "Why your phone feels impossible to put down",
+    "scenes": [
+        {"stage": "hook", "narration": "Your phone is designed to work exactly like a slot machine.",
+         "pose": "shocked", "move": "walk_in", "props": [{"name": "phone", "at": "right"}],
+         "emote": "exclaim", "keyword": "Slot machine", "accent": "red"},
+        {"stage": "disrupt", "narration": "Most people think they just lack willpower. But willpower is not the real problem.",
+         "pose": "shrug", "props": [{"name": "dumbbell", "at": "left"}, {"name": "cross", "at": "right"}],
+         "emote": "question", "keyword": "Not willpower", "accent": "blue"},
+        {"stage": "secret", "narration": "Every pull to refresh is a gamble. Sometimes you get a like, sometimes nothing.",
+         "pose": "phone", "props": [{"name": "phone", "at": "hand"}, {"name": "heart", "at": "above"}],
+         "emote": None, "keyword": "Random rewards", "accent": "yellow"},
+        {"stage": "secret", "narration": "Your brain releases dopamine in anticipation, and unpredictable rewards keep you hooked the longest.",
+         "pose": "think", "other": {"pose": "point_left", "label": "your brain"},
+         "props": [{"name": "brain", "at": "center"}], "emote": "sparkle", "keyword": "Dopamine", "accent": "purple"},
+        {"stage": "truth", "narration": "So the craving is not about the content. It is about the next maybe.",
+         "pose": "facepalm", "props": [{"name": "hourglass", "at": "right"}], "emote": "sweat",
+         "keyword": "The next maybe", "accent": "orange"},
+        {"stage": "elevate", "narration": "Turn off notifications, and the slot machine loses its lever.",
+         "pose": "confident", "move": "jump", "props": [{"name": "bell", "at": "left"}, {"name": "check", "at": "right"}],
+         "emote": None, "keyword": "Remove the lever", "accent": "green"},
+    ],
+    "outro": "How many hours did your phone steal today?",
+    "description": "Variable rewards make phones hard to put down. Here is the psychology in under a minute.",
+    "tags": ["psychology", "dopamine", "phone addiction", "habits"],
+}

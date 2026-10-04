@@ -1,0 +1,8 @@
+numpy>=1.26
+pycairo>=1.25
+requests>=2.31
+google-genai>=2.0
+kokoro>=0.7
+soundfile>=0.12
+google-api-python-client>=2.100
+google-auth>=2.23
