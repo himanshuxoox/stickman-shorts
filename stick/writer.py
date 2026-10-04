@@ -121,7 +121,7 @@ def write(history, rng):
 def fact_check(script):
     q = ("You are a strict fact-checker for psychology content. Check every claim in this script. "
          "Rewrite any line that is a myth, overstated, not replicated, or presented as more certain "
-         "than the evidence. Remove made-up numbers. Hedge with 'research suggests' at most ONCE in the "
+         "than the evidence, and fix any line that contradicts itself or another line. Remove made-up numbers. Hedge with 'research suggests' at most ONCE in the "
          "whole script and NEVER in the first scene — keep the hook bold (a true claim can be punchy). "
          "Keep total narration 110-140 words, the energy, and ALL visual fields unchanged. Return the SAME JSON plus "
          "\"confidence\": \"high\" | \"medium\" | \"low\".\n\n" + json.dumps(script, ensure_ascii=False))

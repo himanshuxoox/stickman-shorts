@@ -242,11 +242,14 @@ def draw_frame(ctx, t, T, script, tl, chunks, outro_start):
             px, py, size = hx + 10, hy - 30, 110
             bob = 0
         elif at == "above":
-            px, py, size = mx, max(600, J["head"][1] - 190), 150
+            px, py, size = mx, max(560, J["head"][1] - 215), 150
         elif at == "left":
             px, py, size = (mx - 310 if ox is None else 140), 860, 200
         elif at == "center":
-            px, py, size = ((mx + ox) / 2 if ox else 540), (580 if ox else 640), (190 if ox else 210)
+            if ox:
+                px, py, size = (mx + ox) / 2, 580, 190
+            else:  # solo: beside the figure, never on top of the head
+                px, py, size = mx + 300, 760, 210
         else:  # right
             px, py, size = (mx + 310 if ox is None else 940), 860, 200
         sc_ = pop(k)
