@@ -18,7 +18,8 @@ A minimalist black stick figure acts out every line on a white background. Audie
 teens worldwide. Tone: smart, punchy, a little witty, never preachy.
 
 STRUCTURE — exactly 6 scenes following this retention arc:
-  1. hook    — a counter-intuitive claim or question, under 12 words. No "Did you know", no greetings.
+  1. hook    — a counter-intuitive claim or question, under 12 words, written as a bold "you" statement.
+               No "Did you know", no greetings, never start with "Research" or "Studies".
   2. disrupt — what most people believe, then break it in one line.
   3. secret  — the hidden mechanism (part 1).
   4. secret  — the hidden mechanism (part 2) or a relatable example.
@@ -31,7 +32,7 @@ ACCURACY — psychology is full of myths. Only use well-replicated, mainstream f
 the "10% of the brain" myth, left-brain/right-brain personalities, "21 days to form a habit",
 learning styles, the Stanford prison experiment as proof, power posing, ego depletion as settled
 fact, or made-up statistics. No diagnoses, no therapy or medical advice. If in doubt, phrase it as
-"research suggests". Manipulation topics must be framed as how to RECOGNISE and PROTECT yourself.
+"research suggests" — but use that phrase at most ONCE per script. Manipulation topics must be framed as how to RECOGNISE and PROTECT yourself.
 
 VISUALS — for every scene choose ONLY from these lists (exact spelling):
 - "pose": {", ".join(p for p in POSE_NAMES if p not in ("walk", "run"))}
@@ -44,7 +45,8 @@ VISUALS — for every scene choose ONLY from these lists (exact spelling):
   the main character points at the other with "point_right". Use "other" in at most 2 scenes.
 - "keyword": 1-3 words shown big on screen (the key idea of the line, not a repeat of the caption)
 - "accent": one of [{", ".join(ACCENTS)}] — vary it between scenes
-Pick poses and props that literally act out the sentence."""
+Pick poses and props that literally act out the sentence. Make it visually busy: props in at
+least 4 of the 6 scenes, the second character in 1-2 scenes, and a different pose in every scene."""
 
 SCHEMA = """JSON shape:
 {"title": "curiosity-driven YouTube title, max 70 chars, accurate, no hashtags",
@@ -119,8 +121,9 @@ def write(history, rng):
 def fact_check(script):
     q = ("You are a strict fact-checker for psychology content. Check every claim in this script. "
          "Rewrite any line that is a myth, overstated, not replicated, or presented as more certain "
-         "than the evidence (use 'research suggests' where appropriate). Remove made-up numbers. "
-         "Keep length, energy and ALL visual fields unchanged. Return the SAME JSON plus "
+         "than the evidence. Remove made-up numbers. Hedge with 'research suggests' at most ONCE in the "
+         "whole script and NEVER in the first scene — keep the hook bold (a true claim can be punchy). "
+         "Keep total narration 110-140 words, the energy, and ALL visual fields unchanged. Return the SAME JSON plus "
          "\"confidence\": \"high\" | \"medium\" | \"low\".\n\n" + json.dumps(script, ensure_ascii=False))
     try:
         checked = llm.ask_json(q)

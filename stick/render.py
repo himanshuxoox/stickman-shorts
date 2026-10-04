@@ -226,8 +226,9 @@ def draw_frame(ctx, t, T, script, tl, chunks, outro_start):
         ctx.paint_with_alpha(oa)
     J = rig.draw(ctx, mpose, mx, GROUND, SCALE, INK)
 
-    # props
-    for n, p in enumerate(sc.get("props", [])[:2]):
+    in_outro = t >= outro_start
+    # props (cleared on the outro card so they don't cover the CTA text)
+    for n, p in enumerate([] if in_outro else sc.get("props", [])[:2]):
         f = PR.PROPS.get(p.get("name"))
         if not f:
             continue
@@ -256,7 +257,7 @@ def draw_frame(ctx, t, T, script, tl, chunks, outro_start):
         ctx.restore()
 
     # emote
-    em = PR.EMOTES.get(sc.get("emote") or "")
+    em = None if in_outro else PR.EMOTES.get(sc.get("emote") or "")
     if em:
         k = (lt - 0.4) / 0.3
         if k > 0:
