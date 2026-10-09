@@ -8,8 +8,8 @@ on:
   workflow_dispatch:
     inputs:
       count:
-        description: "How many videos"
-        default: "4"
+        description: "How many videos (empty = 2 fights, or 4 explainers)"
+        default: ""
       force:
         description: "Run even if today's batch already exists"
         default: "false"
@@ -42,7 +42,7 @@ jobs:
           cache: pip
 
       - name: Cache voice model
-        if: steps.check.outputs.skip != 'true'
+        if: steps.check.outputs.skip != 'true' && vars.STICK_MODE == 'explainer'
         uses: actions/cache@v4
         with:
           path: ~/.cache/huggingface
@@ -58,11 +58,21 @@ jobs:
       - name: Python packages
         if: steps.check.outputs.skip != 'true'
         run: |
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install -r requirements.txt
+          if [ "${{ vars.STICK_MODE }}" = "explainer" ]; then
+            pip install torch --index-url https://download.pytorch.org/whl/cpu
+            pip install -r requirements.txt
+          else
+            pip install numpy pycairo google-api-python-client google-auth
+          fi
 
-      - name: Make today's stickman Shorts
-        if: steps.check.outputs.skip != 'true'
+      # Default: ~2-minute anime-style stickman fights (no API keys needed).
+      # Set the repo variable STICK_MODE = explainer to go back to the psychology explainers.
+      - name: Make today's stickman fights
+        if: steps.check.outputs.skip != 'true' && vars.STICK_MODE != 'explainer'
+        run: python -m stick.fight --count "${{ github.event.inputs.count || '2' }}"
+
+      - name: Make today's stickman explainers
+        if: steps.check.outputs.skip != 'true' && vars.STICK_MODE == 'explainer'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python -m stick.batch --count "${{ github.event.inputs.count || '4' }}"
@@ -73,7 +83,7 @@ jobs:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-          PUBLISH_SLOTS: ${{ vars.PUBLISH_SLOTS || '09:00,13:00,19:00,22:30' }}
+          PUBLISH_SLOTS: ${{ vars.PUBLISH_SLOTS || (vars.STICK_MODE == 'explainer' && '09:00,13:00,19:00,22:30' || '12:00,20:00') }}
         run: python -m stick.upload --out out
 
       - name: Keep videos as a downloadable artifact (7 days)

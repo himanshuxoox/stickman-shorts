@@ -1,3 +1,25 @@
+# Stickman Shorts: anime-style stickman fights (default) + psychology explainers
+
+## Fights (default mode)
+
+`python -m stick.fight --count 2` makes ~2-minute "RED vs BLUE" stickman battles, fully in code:
+
+- **Every seed is a different fight script** built from beats: dash-in combos, block + counter,
+  teleport dodge ("TOO SLOW!"), uppercut launch + air combo + ground slam (crater), wall splats,
+  a beam clash, a power-up comeback, and a K.O. About 1 in 3 fights ends with a twist.
+- **Anime look**: impact frames (colour inversion), speed lines, afterimages, screen shake,
+  shockwaves, auras, camera zoom punches, 4 background themes.
+- **Game feel**: health bars that follow the story, "N HIT COMBO!", "BLOCKED!", "K.O.!".
+- **Engagement**: "RED vs BLUE — WHO WINS?" on screen and "Comment RED or BLUE!" at the bottom.
+- **Audio**: an original synthesized fight track + punch / whoosh / beam / boom effects.
+- Each video ends with a short cross-fade back to its first frame, so Shorts replays loop.
+- No API keys needed. `FIGHT_LENGTH` (env) changes the length (default 118 s).
+
+The workflow makes 2 fights a day and (with `AUTO_UPLOAD = true`) schedules them at 12:00 and 20:00 IST.
+Set the repo variable `STICK_MODE = explainer` to switch back to the psychology explainers below.
+
+---
+
 # Stickman Shorts: daily psychology explainers, animated in code
 
 This repo makes 4 YouTube Shorts a day and costs nothing to run. In each one, a minimalist black
