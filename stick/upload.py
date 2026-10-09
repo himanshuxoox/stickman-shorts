@@ -7,9 +7,9 @@ Upload a day's batch to YouTube, each scheduled to a different time slot.
 Needs env vars (GitHub secrets): YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN
 Get the refresh token once with:  python auth_setup.py
 
-NOTE: until your Google Cloud project passes the YouTube API audit, YouTube
-locks every API upload to PRIVATE. Keep AUTO_UPLOAD off until then and upload
-the rendered files manually from YouTube Studio.
+Each upload is scheduled to the next free slot. The last slot used is remembered in
+state/schedule_<out>.json, so two runs on the same day (e.g. a manual run and the
+scheduled one) never put two videos on the same slot.
 """
 import argparse, datetime as dt, json, os, sys
 from zoneinfo import ZoneInfo
@@ -20,13 +20,35 @@ IST = ZoneInfo("Asia/Kolkata")
 SLOTS = os.environ.get("PUBLISH_SLOTS", "08:30,12:30,17:30,21:00").split(",")
 
 
-def plan_times(date_str, n):
-    """Return n aware datetimes: today's remaining slots, spilling into tomorrow."""
+def _sched_path(out_dir):
+    return os.path.join(ROOT, "state", f"schedule_{os.path.basename(os.path.normpath(out_dir))}.json")
+
+
+def last_slot(out_dir):
+    try:
+        with open(_sched_path(out_dir)) as f:
+            return dt.datetime.fromisoformat(json.load(f)["last_publish_at"])
+    except Exception:
+        return None
+
+
+def save_last_slot(out_dir, when):
+    os.makedirs(os.path.join(ROOT, "state"), exist_ok=True)
+    with open(_sched_path(out_dir), "w") as f:
+        json.dump({"last_publish_at": when.isoformat()}, f, indent=1)
+
+
+def plan_times(date_str, n, after=None):
+    """Return n aware datetimes: the next free slots (today's remaining ones, then tomorrow's),
+    always later than `after` (the last slot an earlier run already used)."""
     try:
         day = dt.date.fromisoformat(date_str)
     except ValueError:  # e.g. a "test" folder -> schedule from today
         day = dt.datetime.now(IST).date()
     now = dt.datetime.now(IST) + dt.timedelta(minutes=20)  # YouTube needs publishAt in future
+    if after is not None and after >= now:
+        now = after + dt.timedelta(minutes=1)
+        day = max(day, now.date())
     out, d = [], day
     while len(out) < n:
         for s in SLOTS:
@@ -90,7 +112,7 @@ def main():
     with open(mpath) as f:
         manifest = json.load(f)
     todo = [v for v in manifest["videos"] if not v.get("youtube_id")]
-    times = plan_times(a.date, len(todo))
+    times = plan_times(a.date, len(todo), after=last_slot(a.out))
 
     yt = None if a.dry_run else youtube_client()
     for item, when in zip(todo, times):
@@ -106,6 +128,7 @@ def main():
             continue
         item["youtube_id"] = vid
         item["publish_at"] = when.isoformat()
+        save_last_slot(a.out, when)
         print(f"   -> https://youtube.com/shorts/{vid}")
 
     if not a.dry_run:
