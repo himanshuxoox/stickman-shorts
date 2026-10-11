@@ -111,6 +111,48 @@ def sfx(kind, seed=0):
         f = 120 * 2 ** (3 * t / t[-1])
         w = 2 * ((np.cumsum(f) / SR) % 1) - 1
         return 0.3 * w * (t / t[-1]) ** 1.5
+    # ---- game sounds (Ragdoll Duel)
+    if kind == "slash":
+        n = int(0.16 * SR); t = np.arange(n) / SR
+        x = _noise(n, seed); x = x - _lowpass(x, 3)
+        return 0.55 * x * np.exp(-t * 26) + 0.25 * np.sin(2 * np.pi * 2400 * t) * np.exp(-t * 40)
+    if kind == "pew":
+        n = int(0.14 * SR); t = np.arange(n) / SR
+        f = 1700 * np.exp(-t * 22) + 260
+        return 0.32 * np.sign(np.sin(2 * np.pi * np.cumsum(f) / SR)) * np.exp(-t * 18)
+    if kind == "laser":
+        n = int(1.5 * SR); t = np.arange(n) / SR
+        f = 210 * (1 + 0.05 * np.sin(2 * np.pi * 11 * t))
+        w = 2 * ((np.cumsum(f) / SR) % 1) - 1
+        w2 = 2 * ((np.cumsum(f * 2.01) / SR) % 1) - 1
+        return (0.3 * w + 0.18 * w2) * np.minimum(1, t * 30) * np.minimum(1, (t[-1] - t) * 6)
+    if kind == "zap":
+        n = int(0.18 * SR); t = np.arange(n) / SR
+        x = _noise(n, seed) * (np.sin(2 * np.pi * 60 * t) > 0)
+        return 0.35 * x * np.exp(-t * 16)
+    if kind == "heal":
+        out = np.zeros(int(0.7 * SR))
+        for j, f in enumerate([523.25, 659.25, 783.99, 1046.5]):
+            x = tone(f, 0.35, 0.16, "sine", 6); o = int(j * 0.07 * SR)
+            out[o:o + len(x)] += x[: len(out) - o]
+        return out
+    if kind == "pickup":
+        out = np.zeros(int(0.3 * SR))
+        for j, f in enumerate([880.0, 1318.5]):
+            x = tone(f, 0.16, 0.16, "square", 14); o = int(j * 0.06 * SR)
+            out[o:o + len(x)] += x[: len(out) - o]
+        return out
+    if kind == "beep":
+        return tone(880.0, 0.25, 0.25, "square", 10)
+    if kind == "go":
+        return tone(1318.5, 0.6, 0.25, "square", 4)
+    if kind == "fanfare":
+        out = np.zeros(int(2.6 * SR))
+        for j, (f, d) in enumerate([(523.25, .18), (659.25, .18), (783.99, .18), (1046.5, 1.4)]):
+            x = tone(f, d + 0.3, 0.22, "square", 2.5 if d > 1 else 8) + tone(f / 2, d + 0.3, 0.12, "saw", 3)
+            o = int(j * 0.17 * SR)
+            out[o:o + len(x)] += x[: len(out) - o]
+        return out
     return np.zeros(10)
 
 
@@ -165,12 +207,18 @@ def music(total, sections, seed=0, bpm=None):
     return out
 
 
+VOL = dict(punch=0.6, slash=0.75, pew=0.5, whoosh=0.55, block=0.7)
+
+
 def mix(total, events, sections, path, seed=0):
     """events: list of (t, kind). Writes a 16-bit mono wav."""
     m = music(total, sections, seed) * 0.55
     fx = np.zeros_like(m)
+    cache = {}
     for i, (t, kind) in enumerate(events):
-        x = sfx(kind, seed + i)
+        if kind not in cache or kind in ("boom", "ko", "heavy", "crack"):
+            cache[kind] = sfx(kind, seed + i)
+        x = cache[kind] * VOL.get(kind, 1.0)
         j = int(t * SR)
         if 0 <= j < len(fx):
             fx[j:j + len(x)] += x[: len(fx) - j]

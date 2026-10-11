@@ -63,13 +63,15 @@ jobs:
             pip install torch --index-url https://download.pytorch.org/whl/cpu
             pip install -r requirements.txt
           else
-            pip install numpy pycairo google-api-python-client google-auth
+            pip install numpy pycairo pymunk pillow google-api-python-client google-auth
           fi
 
-      # Default: ~2-minute anime-style stickman fights (no API keys needed).
+      # Default: 1 fight with our own AI-made characters (assets/fighters) + 1 classic stickman fight per day.
       # Set the repo variable STICK_MODE = explainer to go back to the psychology explainers.
       - name: Make today's stickman fights
         if: steps.check.outputs.skip != 'true' && vars.STICK_MODE != 'explainer'
+        env:
+          STICK_FORMATS: ${{ vars.STICK_FORMATS || 'skin,fight' }}   # 1 fight with our AI characters + 1 classic
         run: python -m stick.fight --count "${{ github.event.inputs.count || '2' }}"
 
       - name: Make today's stickman explainers

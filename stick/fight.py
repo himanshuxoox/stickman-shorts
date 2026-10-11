@@ -8,7 +8,8 @@ The look borrows anime tricks: impact frames (colour inversion), speed lines,
 afterimages, screen shake, auras, shockwaves. Health bars + combo counters give it a
 fighting-game feel, and "RED vs BLUE — who wins?" drives comments.
 
-    python -m stick.fight --count 2            # -> out/<date>/NN_fight.mp4 + manifest
+    python -m stick.fight --count 2            # -> out/<date>/NN_duel / NN_fight .mp4 + manifest
+    STICK_FORMATS=duel,fight (default) alternates ragdoll duels (stick/duel.py) and anime fights.
 """
 import argparse, bisect, datetime as dt, json, math, os, random, subprocess, time
 from zoneinfo import ZoneInfo
@@ -84,7 +85,7 @@ def ease(k, kind):
 class Fighter:
     def __init__(self, name, color, x, face, scale=1.0):
         self.name, self.color, self.scale = name, color, scale
-        self.keys = [dict(t=0.0, pose=POSES["stance"], x=x, air=0.0, rot=0.0, face=face, ease="lin")]
+        self.keys = [dict(t=0.0, pose=POSES["stance"], x=x, air=0.0, rot=0.0, face=face, ease="lin", pname="stance")]
         self.times = [0.0]
         self.hp = [(0.0, 100.0)]
         self.raw = []          # (t, raw damage) — rescaled into a story-shaped HP curve later
@@ -99,6 +100,7 @@ class Fighter:
         k.update(t=t, ease=ease_)
         if pose is not None:
             k["pose"] = POSES[pose] if isinstance(pose, str) else pose
+            k["pname"] = pose if isinstance(pose, str) else "custom"
         for name, v in (("x", x), ("air", air), ("rot", rot), ("face", face)):
             if v is not None:
                 k[name] = v
@@ -128,7 +130,8 @@ class Fighter:
         if b["pose"] is POSES["stance"] and a["pose"] is POSES["stance"]:     # idle bounce
             pose["y"] += 5 * math.sin(t * 2 * math.pi * 1.8)
         return dict(pose=pose, x=a["x"] + (b["x"] - a["x"]) * k, air=a["air"] + (b["air"] - a["air"]) * k,
-                    rot=a["rot"] + (b["rot"] - a["rot"]) * k, face=b["face"] if k > 0.5 else a["face"])
+                    rot=a["rot"] + (b["rot"] - a["rot"]) * k, face=b["face"] if k > 0.5 else a["face"],
+                    pname=b.get("pname") if k > 0.35 else a.get("pname"))
 
     def damage(self, t, d, floor=8.0):
         self.raw.append((t, d))
@@ -146,7 +149,7 @@ class Fighter:
 
 # ----------------------------------------------------------------------------- director
 class Director:
-    def __init__(self, seed):
+    def __init__(self, seed, roster=None):
         self.rng = random.Random(seed)
         self.seed = seed
         self.t = 0.0
@@ -155,9 +158,13 @@ class Director:
         self.music = []     # (t0, t1, intensity)
         names = self.rng.choice([("RED", "BLUE"), ("BLUE", "RED")])
         cols = {"RED": RED, "BLUE": BLUE}
+        if roster:                     # [(name, colour), (name, colour)] e.g. skinned fighters
+            names = self.rng.choice([(roster[0][0], roster[1][0]), (roster[1][0], roster[0][0])])
+            cols = dict(roster)
         self.A = Fighter(names[0], cols[names[0]], -330, 1)
         self.B = Fighter(names[1], cols[names[1]], 330, -1)
         self.extra = []     # twist characters
+        self.no_twist = bool(roster)        # skinned fighters: always a real K.O. ending
         self.combo_n = 0
         self.marks = {}
 
@@ -609,7 +616,7 @@ class Director:
             if r.random() < 0.25:
                 self.block_counter(other, hero)       # the loser still fights back
         self.knockout(hero, other)
-        twist = r.random() < 0.3
+        twist = r.random() < 0.3 and not self.no_twist
         if twist:
             tiny = self.twist_tiny(hero)
             self.winner = tiny
@@ -1138,9 +1145,43 @@ def main():
     out_dir = os.path.join(a.out, a.date)
     os.makedirs(out_dir, exist_ok=True)
     items = []
+    # STICK_FORMATS: which video types, in order (default: 1 ragdoll duel + 1 anime fight per day)
+    formats = [f.strip() for f in os.environ.get("STICK_FORMATS", "skin,fight").split(",") if f.strip()]
+    duel_seed = st.get("duel_seed", 1)
     for i in range(a.count):
-        seed = seed0 + i
+        fmt = formats[i % len(formats)]
         t0 = time.time()
+        if fmt == "duel":
+            from . import duel
+            seed = duel.find_seed(duel_seed)
+            duel_seed = seed + 1
+            base = os.path.join(out_dir, f"{i + 1:02d}_duel_{seed}")
+            G, dur = duel.render(seed, base)
+            item = dict(file=os.path.basename(base + ".mp4"), cover=os.path.basename(base + "_cover.png"),
+                        duration=dur, seed=seed, format="duel", winner=G.names[G.round_winner.idx],
+                        score=G.score, **duel.make_meta(G, seed))
+            with open(base + ".json", "w") as f:
+                json.dump(item, f, indent=1, ensure_ascii=False)
+            items.append(item)
+            print(f"[{i + 1}] duel seed={seed} {dur}s score={G.score} ({time.time() - t0:.0f}s)  {item['title']}",
+                  flush=True)
+            continue
+        if fmt == "skin":                      # fighters made from our AI character art
+            from . import skin
+            seed = seed0 + i
+            fa, fb, arena = skin.pick(seed)
+            base = os.path.join(out_dir, f"{i + 1:02d}_{fa}_vs_{fb}_{seed}")
+            D, dur = skin.render(seed, base, fa, fb, arena, a.length)
+            item = dict(file=os.path.basename(base + ".mp4"), cover=os.path.basename(base + "_cover.png"),
+                        duration=dur, seed=seed, format="skin", winner=D.winner.name,
+                        **skin.make_meta(D, seed))
+            with open(base + ".json", "w") as f:
+                json.dump(item, f, indent=1, ensure_ascii=False)
+            items.append(item)
+            print(f"[{i + 1}] skin {fa} vs {fb} @ {arena} seed={seed} {dur}s winner={D.winner.name} "
+                  f"({time.time() - t0:.0f}s)  {item['title']}", flush=True)
+            continue
+        seed = seed0 + i
         base = os.path.join(out_dir, f"{i + 1:02d}_fight_{seed}")
         D, dur = render(seed, base, a.length)
         item = dict(file=os.path.basename(base + ".mp4"), cover=os.path.basename(base + "_cover.png"),
@@ -1158,6 +1199,7 @@ def main():
                                v["description"], "", "TAGS:", ", ".join(v["tags"]), "",
                                "Made for kids: NO  |  Category: Film & Animation", "", ""]))
     st["fight_seed"] = seed0 + a.count
+    st["duel_seed"] = duel_seed
     st["videos"] = st.get("videos", []) + [dict(date=a.date, topic="fight", title=v["title"]) for v in items]
     os.makedirs(os.path.dirname(state_p), exist_ok=True)
     json.dump(st, open(state_p, "w"), indent=1, ensure_ascii=False)

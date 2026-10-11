@@ -6,3 +6,4 @@ kokoro>=0.7
 soundfile>=0.12
 google-api-python-client>=2.100
 google-auth>=2.23
+pymunk>=6.6
