@@ -185,21 +185,10 @@
   ],
   "r": 148.67332244383525
  },
- "weapon": {
-  "grip": [
-   525.12,
-   348.2337873637872
-  ],
-  "tip": [
-   1448.0,
-   348.2337873637872
-  ],
-  "file": "Chained Crimson Armored Gauntlet.png"
- },
  "effect": {
   "size": [
-   1365,
-   677
+   760,
+   376
   ],
   "file": "Blazing Fireball in Motion.png"
  }

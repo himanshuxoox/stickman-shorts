@@ -90,13 +90,92 @@ def skull(sub):
     lum = sub[..., :3].astype(np.float32).mean(2)
     dark = (a & (lum < 45)).astype(np.uint8)
     n, lab, st, cent = cv2.connectedComponentsWithStats(dark, 8)
-    i = 1 + int(np.argmax(st[1:, 4]))
-    r = float(np.sqrt(st[i, 4] / np.pi))
-    return [float(cent[i][0]), float(cent[i][1])], r
+    if n > 1:
+        i = 1 + int(np.argmax(st[1:, 4]))
+        if st[i, 4] > 0.12 * a.sum():
+            r = float(np.sqrt(st[i, 4] / np.pi))
+            return [float(cent[i][0]), float(cent[i][1])], r
+    ys, xs = np.nonzero(a)                         # light-skinned / masked face: use the head's lower half
+    cx, cy = float(xs.mean()), float(ys.mean() + 0.1 * (ys.max() - ys.min()))
+    return [cx, cy], float(0.3 * min(xs.max() - xs.min(), ys.max() - ys.min()))
 
 
 def save(out, name, sub):
     cv2.imwrite(os.path.join(out, name + ".png"), sub)
+
+
+def classify_files(folder):
+    """Recognise the files by their content: parts sheet (many pieces on green), faces (6 heads on green),
+    weapon (1-5 pieces on green), effect (black background)."""
+    out = {}
+    for f in sorted(os.listdir(folder)):
+        if not f.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+            continue
+        p = os.path.join(folder, f)
+        img = cv2.imread(p)
+        c = np.concatenate([img[:20, :20], img[:20, -20:], img[-20:, :20], img[-20:, -20:]]).reshape(-1, 3)
+        b_, g_, r_ = c.mean(0)
+        if c.mean() < 45:
+            out.setdefault("effect", p)
+            continue
+        if not (g_ > 150 and r_ < 120 and b_ < 120):
+            continue
+        n = len(components(key_green(img)))
+        lf = f.lower()
+        if n >= 10:
+            out["parts"] = p
+        elif n == 6 or any(w in lf for w in ("expression", "emote", "face")):
+            out["faces"] = p
+        else:
+            out.setdefault("weapon", p)
+    return out
+
+
+WEAPON_LEN = {"katana": 330, "sword": 330, "sickle": 230, "scythe": 430, "staff": 460, "polearm": 470,
+              "spear": 470, "lance": 470}
+
+
+def classify_parts(rgba, comps):
+    """Name every piece of a parts sheet, whatever its layout."""
+    H, W = rgba.shape[:2]
+    comps = sorted(comps, key=lambda c: -c["area"])
+    named = {}
+    # a fully assembled reference figure (some sheets have one on the left): very tall
+    rest = [c for c in comps if c["box"][3] < 0.72 * H]
+    # scarf: the widest piece in the upper half
+    sc = [c for c in rest if c["box"][2] > 1.6 * c["box"][3] and c["c"][1] < 0.5 * H]
+    if sc:
+        named["scarf"] = max(sc, key=lambda c: c["box"][2])
+        rest.remove(named["scarf"])
+    named["torso"] = max(rest, key=lambda c: c["area"])
+    rest.remove(named["torso"])
+    top = [c for c in rest if c["box"][1] < 0.25 * H]
+    named["head"] = max(top, key=lambda c: c["area"])
+    rest.remove(named["head"])
+    rest = sorted(rest, key=lambda c: -c["area"])[:12]
+    if len(rest) < 12:
+        raise RuntimeError(f"only {len(rest)} limb pieces found")
+    # 4 columns of 3 pieces (1-D k-means on x)
+    xs = np.array([c["c"][0] for c in rest])
+    cent = np.quantile(xs, [0.12, 0.37, 0.62, 0.88])
+    for _ in range(30):
+        lab = np.argmin(np.abs(xs[:, None] - cent[None]), 1)
+        cent = np.array([xs[lab == k].mean() if (lab == k).any() else cent[k] for k in range(4)])
+    cols = [[c for c, l in zip(rest, lab) if l == k] for k in range(4)]
+    if sorted(len(c) for c in cols) != [3, 3, 3, 3]:
+        order = sorted(rest, key=lambda c: c["c"][0])
+        cols = [order[i * 3:(i + 1) * 3] for i in range(4)]
+    cols = [sorted(c, key=lambda c: c["c"][1]) for c in cols]
+    # legs = the two columns whose bottom piece (the foot) sits lowest / is widest
+    score = [c[-1]["c"][1] + 0.5 * c[-1]["box"][2] for c in cols]
+    order = np.argsort(score)
+    arms = sorted([cols[i] for i in order[:2]], key=lambda c: c[0]["c"][0])
+    legs = sorted([cols[i] for i in order[2:]], key=lambda c: c[0]["c"][0])
+    for k, col in enumerate(arms):
+        named[f"ua{k}"], named[f"fa{k}"], named[f"fist{k}"] = col
+    for k, col in enumerate(legs):
+        named[f"th{k}"], named[f"sn{k}"], named[f"foot{k}"] = col
+    return named
 
 
 def find(folder, *words, exclude=()):
@@ -110,36 +189,22 @@ def find(folder, *words, exclude=()):
 def main(src, out):
     os.makedirs(out, exist_ok=True)
     rig = {}
-    # ---------------- parts sheet
-    p = find(src, "parts", "armor sprite", "rig")
-    img = cv2.imread(p)
-    sx, sy = img.shape[1] / 1536.0, img.shape[0] / 1024.0
+    files = classify_files(src)
+    img = cv2.imread(files["parts"])
     rgba = key_green(img)
-    comps = components(rgba)
-    comps.sort(key=lambda c: -c["area"])
-    used = set()
-
-    def take(pred):
-        for c in comps:
-            if id(c) not in used and pred(c):
-                used.add(id(c))
-                return c
-        raise RuntimeError("part not found")
-
-    head = take(lambda c: c["c"][0] < 560 * sx and c["c"][1] < 360 * sy)
-    torso = take(lambda c: abs(c["c"][0] - 768 * sx) < 220 * sx and c["c"][1] < 470 * sy)
-    scarf = take(lambda c: c["c"][0] > 820 * sx and c["c"][1] < 480 * sy)
-    rest = [c for c in comps if id(c) not in used]
-    # greedy nearest assignment to the template
-    pairs = sorted(((np.hypot(c["c"][0] - tx * sx, c["c"][1] - ty * sy), name, k)
-                    for name, (tx, ty) in TEMPLATE.items() for k, c in enumerate(rest)))
-    got, taken = {}, set()
-    for d, name, k in pairs:
-        if name not in got and k not in taken:
-            got[name], _ = rest[k], taken.add(k)
-    missing = [n for n in TEMPLATE if n not in got]
-    if missing:
-        raise RuntimeError(f"missing parts: {missing}")
+    comps_all = components(rgba)
+    key = os.path.basename(os.path.normpath(out)).lower()
+    maps = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "part_maps.json")))
+    if key in maps:                       # hand-checked layout
+        got = {}
+        for name, (px, py) in maps[key].items():
+            inside = [c for c in comps_all if c["box"][0] <= px <= c["box"][0] + c["box"][2]
+                      and c["box"][1] <= py <= c["box"][1] + c["box"][3]]
+            pool = inside or comps_all
+            got[name] = min(pool, key=lambda c: (c["c"][0] - px) ** 2 + (c["c"][1] - py) ** 2)
+    else:
+        got = classify_parts(rgba, comps_all)
+    head, torso, scarf = got["head"], got["torso"], got.get("scarf")
 
     s = crop(rgba, head); save(out, "head", s)
     (cx, cy), r = skull(s)
@@ -160,15 +225,18 @@ def main(src, out):
     waist = min(widths)[1]
     rig["torso"] = dict(sh=row_center(0.14), hip=row_center(min(0.72, waist + 0.1)), waist=waist)
 
-    s = crop(rgba, scarf)
-    s = s[:, ::-1].copy()                          # trail behind a right-facing fighter
-    save(out, "scarf", s)
-    ys, xs = np.nonzero(s[..., 3] > 128)
-    right = xs.max()
-    sel = xs > right - 25
-    rig["scarf"] = dict(anchor=[float(right - 8), float(ys[sel].mean())])
+    if scarf is not None:
+        s = crop(rgba, scarf)
+        s = s[:, ::-1].copy()                      # trail behind a right-facing fighter
+        save(out, "scarf", s)
+        ys, xs = np.nonzero(s[..., 3] > 128)
+        right = xs.max()
+        sel = xs > right - 25
+        rig["scarf"] = dict(anchor=[float(right - 8), float(ys[sel].mean())])
 
     for name in TEMPLATE:
+        if name not in got:               # e.g. fist drawn on the forearm piece
+            continue
         s = crop(rgba, got[name])
         if name.startswith("foot"):
             ys, xs = np.nonzero(s[..., 3] > 128)
@@ -188,7 +256,7 @@ def main(src, out):
         rig[name] = dict(p0=p0, p1=p1)
 
     # ---------------- faces sheet (3 x 2)
-    p = find(src, "expression", "face")
+    p = files.get("faces")
     if p:
         img = cv2.imread(p)
         rgba = key_green(img)
@@ -203,20 +271,28 @@ def main(src, out):
             rig["face_" + nm] = dict(skull=[cx, cy], r=r)
 
     # ---------------- weapon (on green)
-    p = find(src, "spear", "sword", "katana", "axe", "hammer", "scythe", "staff", "weapon", "gauntlet",
-             exclude=("parts", "sprite", "expression"))
+    p = files.get("weapon")
+    wcfg = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "weapons.json")))
+    wc = wcfg.get(key, {"grip": 0.3, "length": 420, "flip": False})
+    if wc is None:                        # worn gauntlets / magic orbs: nothing held in the hand
+        p = None
     if p:
         img = cv2.imread(p)
         rgba = key_green(img)
         c = max(components(rgba), key=lambda c: c["area"])
         s = crop(rgba, c)
+        if wc.get("flip"):
+            s = s[:, ::-1].copy()
         save(out, "weapon", s)
         ys, xs = np.nonzero(s[..., 3] > 128)
-        rig["weapon"] = dict(grip=[float(xs.min() + 0.36 * (xs.max() - xs.min())), float(ys.mean())],
-                             tip=[float(xs.max()), float(ys.mean())], file=os.path.basename(p))
+        gx = float(xs.min() + wc["grip"] * (xs.max() - xs.min()))
+        col = ys[np.abs(xs - gx) < 6]
+        gy = float(col.mean()) if len(col) else float(ys.mean())
+        rig["weapon"] = dict(grip=[gx, gy], tip=[float(xs.max()), gy], span=float(xs.max() - xs.min()),
+                             length=wc["length"], file=os.path.basename(p))
 
     # ---------------- effect (on black)
-    p = find(src, "fireball", "explosion", "effect", "burst", "blast", "shard")
+    p = files.get("effect")
     if p:
         img = cv2.imread(p)
         s = key_black(img)

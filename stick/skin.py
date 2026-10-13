@@ -89,7 +89,7 @@ class Skin:
         w = self.rig.get("weapon")
         self.weapon = w
         if w:
-            self.wscale = 470.0 / max(1.0, (w["tip"][0] - w["grip"][0]) / 0.64)   # whole spear ~ 470 px
+            self.wscale = w.get("length", 470) / max(1.0, w.get("span", (w["tip"][0] - w["grip"][0]) / 0.7))
         self.effect = self.img.get("effect")
 
     def joints(self, p, x, ground):
@@ -159,7 +159,7 @@ class Skin:
 
     def scarf(self, ctx, J, t, speed):
         surf = self.dark.get("scarf")
-        if surf is None:
+        if surf is None or "scarf" not in self.rig:
             return
         an = self.rig["scarf"]["anchor"]
         sx, sy = J["sh"]
@@ -219,6 +219,10 @@ class Skin:
             self.bone(ctx, f"fa{part_i}", el, hd, back)
             dx, dy = hd[0] - el[0], hd[1] - el[1]
             L = math.hypot(dx, dy) or 1
+            if f"fist{part_i}" not in self.rig:          # fist is part of the forearm art
+                if weapon and self.weapon:
+                    self.spear(ctx, el, hd)
+                return
             fl = 0.75 * self.arm_k * math.hypot(self.rig[f"fist{part_i}"]["p1"][0] - self.rig[f"fist{part_i}"]["p0"][0],
                                    self.rig[f"fist{part_i}"]["p1"][1] - self.rig[f"fist{part_i}"]["p0"][1]) * self.gs
             back_off = 0.18 * fl
@@ -264,6 +268,10 @@ class Arena:
         flip = im.transpose(Image.FLIP_LEFT_RIGHT)
         pano.paste(flip, (0, 0)); pano.paste(im, (w, 0)); pano.paste(flip, (2 * w, 0))
         arr = np.asarray(pano).astype(np.float32)
+        top = arr[: int(h * 0.8)] / 255                        # how bright / colourful the scenery is
+        p75 = float(np.percentile(top.max(2), 75))
+        sat = float((top.max(2) - top.min(2)).mean())
+        self.dim = max(0.18, min(0.5, 0.15 + (p75 - 0.45) * 0.9 + (sat - 0.2) * 1.2))   # fighters must pop
         self.top_col = tuple(arr[:12].reshape(-1, 3).mean(0) / 255)
         self.bot_col = tuple(arr[-12:].reshape(-1, 3).mean(0) / 255 * 0.7)
         pano.putalpha(255)
@@ -287,6 +295,9 @@ class Arena:
         ctx.get_source().set_filter(cairo.FILTER_BILINEAR)
         ctx.paint()
         ctx.restore()
+        ctx.set_source_rgba(0.02, 0.02, 0.05, self.dim)
+        ctx.rectangle(-6000, -6000, 12000, 12000)
+        ctx.fill()
 
 
 # ====================================================================== frame
@@ -473,12 +484,16 @@ def available():
 def pick(seed):
     """Matchup + arena for a seed: every pair of available fighters comes up in turn."""
     fighters, arenas = available()
-    pairs = [(a, b) for i, a in enumerate(fighters) for b in fighters[i + 1:]]
+    def far(a, b):                         # skip look-alike matchups (purple vs purple, gold vs gold)
+        ca, cb = FIGHTERS.get(a, ("", (1, 1, 1)))[1], FIGHTERS.get(b, ("", (0, 0, 0)))[1]
+        return sum((x - y) ** 2 for x, y in zip(ca, cb)) ** 0.5 > 0.32
+    pairs = [(a, b) for i, a in enumerate(fighters) for b in fighters[i + 1:] if far(a, b)]
+    random.Random(len(fighters) * 1000 + 7).shuffle(pairs)      # fixed order, well mixed day to day
     rng = random.Random(seed * 17 + 3)
     a, b = pairs[seed % len(pairs)]
     if rng.random() < 0.5:
         a, b = b, a
-    return a, b, arenas[(seed // len(pairs)) % len(arenas)]
+    return a, b, arenas[(seed * 7 + seed // len(pairs)) % len(arenas)]
 
 
 TITLES = [

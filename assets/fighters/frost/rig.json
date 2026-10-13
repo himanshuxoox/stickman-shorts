@@ -188,18 +188,20 @@
  "weapon": {
   "grip": [
    774.6,
-   251.93257088995367
+   250.28958630527816
   ],
   "tip": [
    2141.0,
-   251.93257088995367
+   250.28958630527816
   ],
+  "span": 2135.0,
+  "length": 470,
   "file": "Icy Crystal Spear on Neon Green.png"
  },
  "effect": {
   "size": [
-   1412,
-   946
+   759,
+   509
   ],
   "file": "Neon Ice Crystal Explosion.png"
  }

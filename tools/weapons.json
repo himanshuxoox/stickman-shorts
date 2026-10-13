@@ -1,0 +1,11 @@
+{
+ "_note": "How each fighter holds its weapon: grip = fraction along the image from the left (after flip), length in world px. null = no held weapon.",
+ "blaze": null, "titan": null, "void": null,
+ "frost":   {"grip": 0.36, "length": 470, "flip": false},
+ "phantom": {"grip": 0.06, "length": 430, "flip": false},
+ "shadow":  {"grip": 0.10, "length": 330, "flip": false},
+ "spark":   {"grip": 0.45, "length": 470, "flip": false},
+ "sun":     {"grip": 0.32, "length": 480, "flip": false},
+ "toxic":   {"grip": 0.12, "length": 250, "flip": true},
+ "ninja":   {"grip": 0.10, "length": 340, "flip": false}
+}

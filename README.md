@@ -67,3 +67,18 @@ python -m stick.batch --count 1 --mock     # canned script + placeholder voice, 
 | Props / emotes | `stick/props.py`. Add a drawer function and it is automatically available to the script writer |
 | Look (background, scale, layout) | constants at the top of `stick/render.py` |
 | Voice | env `KOKORO_VOICE` (default `am_michael`) |
+
+## Fighters made from our own AI character art (default)
+
+Every day one video is a fight between two of our 10 characters (BLAZE, FROST, SHADOW, TOXIC, VOID,
+SUN, NINJA, TITAN, SPARK, PHANTOM) in one of 5 arenas. The anime fight engine (`stick/fight.py`)
+moves a skeleton; `stick/skin.py` draws the character art on it as cut-out sprites (like 2D games),
+with face expressions, held weapons and each character's special effect.
+
+- Matchups rotate through 40 pairs (look-alike colour pairs are skipped); the arena changes every day.
+- `STICK_FORMATS` (repo variable): `skin,fight` (default) | `skin,skin` | `fight` | `duel` ...
+- Add a character: put its images (parts sheet, faces 3x2, weapon on green, effect on black) in a
+  folder and run `python tools/extract_fighter.py <folder> assets/fighters/<name>`. If the parts sheet
+  has an unusual layout, add the piece centres to `tools/part_maps.json`; weapon grip/length go in
+  `tools/weapons.json`. Add the name + colour to `FIGHTERS` in `stick/skin.py`.
+- Add an arena: drop a vertical image in `assets/arenas/<name>.jpg` (floor at ~80 % of the height).
